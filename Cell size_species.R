@@ -6,11 +6,12 @@ df <- read.csv("C:/Users/FAN/Desktop/Data/bacteria-archaea-traits-1.0.0/output/c
 
 #Clear the data
 df <- df[!is.na(df$species),]
-df <- df[!is.na(df$growth_tmp),]
-df <- df[!is.na(df$doubling_h),]
+df <- df[!is.na(df$optimum_tmp),]
+df <- df[!is.na(df$doubling_h_norm),]
 
 #Group by shape
 library(dplyr)
+library(ggplot2)
 Shape<-df%>%group_by(cell_shape)%>%summarise(total_N=length(species))
 p <- ggplot(Shape,aes(cell_shape,total_N))+geom_bar(stat = 'identity')
 
@@ -128,43 +129,127 @@ figure5<-ggplot(data = df,aes(x=optimum_tmp,y=log10(growth_rate),color=superking
   geom_point(size=2,alpha=0.6)+
   theme_classic()
 
-#arrhenius tmp
-df <- df %>% mutate(arrhenius_tmp = ifelse(!is.na(growth_tmp), 1/(growth_tmp + 273), NA))
-figure4<-ggplot(data = df,aes(x=arrhenius_tmp,y=log10(growth_rate),color=superkingdom))+
-  geom_point(size=2)+
-  theme_classic()
+# Using "segmented" R package to find analysis break-points in the data
+library(segmented)
+Data<-read.csv('C:/Users/FAN/Desktop/Data/Volume_Madin.csv')
+Data<- Data[!is.na(Data$optimum_tmp),]
+Data$optimum_tmp<-Data$optimum_tmp+273.15
+  
+bacteria_d <- Data[Data$superkingdom == "Bacteria",]
+archaea_d<-Data[Data$superkingdom == "Archaea",]
 
-model <- lm(log10(growth_rate)~arrhenius_tmp, data = df)
-summary(model)
+ggplot(Data, aes(x = 1/optimum_tmp, y = log(growth_rate), col =superkingdom)) +
+  geom_point()
 
+ggplot(bacteria_d, aes(x = 1/optimum_tmp, y = log(growth_rate))) +
+  geom_point()
 
+ggplot(archaea_d, aes(x = 1/optimum_tmp, y = log(growth_rate))) +
+  geom_point()
 
+k <- 8.62e-5 
+x = 1 / (k*(bacteria_d$optimum_tmp))
+y = log(bacteria_d$growth_rate)
+boltzmann_linear <- lm(y ~ x)
+os <- segmented(boltzmann_linear, seg.Z =~ x) 
+plot(x,y)
+plot(os, add=T)
+summary.segmented(os)
+os$psi[2]
+bacteria_breakpoint_celsius <- (1/(k*os$psi[2]))-273.15
+bacteria_breakpoint_celsius
 
-#Integrated data
+# repeat for archaea
+x = 1 / (k*(archaea_d$optimum_tmp))
+y = log(archaea_d$growth_rate)
+
+boltzmann_linear <- lm(y ~ x)
+
+os <- segmented(boltzmann_linear, seg.Z =~ x)
+plot.segmented(os)
+summary.segmented(os)
+
+os$psi[2] # <-- this is the break point
+
+archaea_breakpoint_celsius <- (1/(k*os$psi[2]))-273.15
+archaea_breakpoint_celsius
+
+#classify prokaryotes into Thermo and Meso
+Data$TempPref <- NA
+for (i in 1:length(Data$optimum_tmp)){
+  if (!is.na(Data$optimum_tmp[i])){
+    if (Data$superkingdom[i] == "Bacteria"){
+      if (Data$optimum_tmp[i] > 312.53){ #39.38C
+        Data$TempPref[i] <- "Thermophile"
+      }
+      else{
+        Data$TempPref[i] <- "Mesophile"
+      }
+    }
+    else if (Data$superkingdom[i] == "Archaea"){
+      if (Data$optimum_tmp[i] >299.16){ #26.01c
+        Data$TempPref[i] <- "Thermophile"
+      }
+      else{
+        Data$TempPref[i] <- "Mesophile"
+      }
+    }
+    else{
+      Data$TempPref[i] <- "NA"
+    }
+  }
+  else{
+    data$TempPref[i] <- "NA"
+  }
+}
+
+bacteria_d <- Data[Data$superkingdom == "Bacteria",]
+archaea_d<-Data[Data$superkingdom == "Archaea",]
+
+ggplot(bacteria_d, aes(x =1/(k*optimum_tmp), y = log(growth_rate), col = TempPref)) +
+geom_point()
+
+ggplot(archaea_d, aes(x =1/(k*optimum_tmp), y = log(growth_rate), col = TempPref)) +
+  geom_point()
+
+#Clear the data from Smith
+V_S<- read.csv("C:/Users/FAN/Desktop/Data/Volume_Smith.csv", as.is=TRUE)
+V_S<-V_S[!is.na(V_S$ConLabGrowthTemp),]
+V_S <- V_S[!is.na(V_S$ConSize),]
+V_S <- V_S[!is.na(V_S$StandardisedTraitValue),]
+
+#Integrated data from Hira and Madin
 V<- read.csv("C:/Users/FAN/Desktop/Data/Volume_Madin and Hira.csv", as.is=TRUE)
 
 #classify archaea, bacteria and phytoplankton
 da<-filter(V,Superkingdom=="Archaea")
 Archaea<-da%>%group_by(Species)%>%summarize(Volume_a=mean(Volume))
 Archaea$Superkingdom<-"Archaea"
+write.table (df, file ="C:/Users/FAN/Desktop/Volume_Archaea.csv", sep =",", row.names =TRUE, col.names =TRUE, quote =TRUE)
   
 db<-filter(V,Superkingdom=="Bacteria")
 Bacteria<-db%>%group_by(Species)%>%summarize(Volume_a=mean(Volume))
 Bacteria$Superkingdom<-"Bacteria"
+write.table (df, file ="C:/Users/FAN/Desktop/Volume_Bacteria.csv", sep =",", row.names =TRUE, col.names =TRUE, quote =TRUE)
 
 dp<-filter(V,Superkingdom=="Phytoplankton")
 Phyto<-dp%>%group_by(Species)%>%summarize(Volume_a=mean(Volume))
 Phyto$Superkingdom<-"Phytoplankton"
+write.table (df, file ="C:/Users/FAN/Desktop/Volume_Phyto.csv", sep =",", row.names =TRUE, col.names =TRUE, quote =TRUE)
 
 Total<-rbind(Archaea,Bacteria,Phyto)
 
 library(plyr)
-mu <- ddply(Total, "Superkingdom", summarise,mu=mean(Volume))
+mu <- ddply(Total, "Superkingdom", summarise,mu=mean(Volume_a))
 
-#V of bacteria and archae
-figure2<-ggplot(df, aes(x=log10(volume), color=superkingdom,fill=superkingdom)) +
+#V of bacteria£¬archae and Phyto
+library(ggplot2)
+F2<-ggplot(Total, aes(x=log10(Volume_a), color=Superkingdom,fill=Superkingdom)) +
   geom_density(alpha=0.4)+
-  geom_vline(data=mu, aes(xintercept=log10(mu), color=superkingdom),
+  geom_vline(data=mu, aes(xintercept=log10(mu), color=Superkingdom),
              linetype="dashed")+
   theme_classic()
+
+
+
 
