@@ -23,7 +23,7 @@ F1<-ggplot(data = Data,aes(x=OptimumTemp,y=log10(GrowthRate),color=Superkingdom)
   theme_classic()
 
 #unit from Celsius to K
-Data$OptimumTemp<-Data$OptimumTemp+273.15
+Data$OptimumTemp<-Data$Optimum.Temp+273.15
 Data$TempUnit[Data$TempUnit%in%c("Celsius")]<-"K"
 
 # Using "segmented" R package to find analysis break-points in the data
@@ -123,6 +123,8 @@ for (i in 1:length(Data$OptimumTemp)){
 bacteria_d <- Data[Data$Superkingdom == "Bacteria",]
 archaea_d<-Data[Data$Superkingdom == "Archaea",]
 phyto_d<-Data[Data$Superkingdom == "Phytoplankton",]
+write.table (bacteria_d, file ="C:/Users/FAN/Desktop/Data/bacteria_d.csv", sep =",")
+write.table(Data, file ="C:/Users/FAN/Desktop/Data/Data2.csv", sep =",")
 
 install.packages("patchwork")
 library(patchwork)
@@ -141,42 +143,4 @@ c<-ggplot(phyto_d, aes(x =1/(k*OptimumTemp), y = log(GrowthRate), col = TempPref
   theme_classic()
 T<-a+b+c
 T
-
-#Model fitting
-library(dplyr)
-bacteria_d<- bacteria_d %>% mutate(arrhenius_tmp = 1/(k*OptimumTemp))
-
-library(ggplot2)
-a2<-ggplot(bacteria_d, aes(arrhenius_tmp,log(GrowthRate), fill=TempPref,color=TempPref))+
-  geom_point(shape=21,size=1,alpha=0.5)+
-  geom_smooth(method = "lm",se=F)+
-  theme_classic()+
-  theme(legend.position = "none")
-
-#Arrhenius_temp
-library(plyr)
-model1<-bacteria_d%>%filter(TempPref=="Mesophile")
-m1<-lm(log10(GrowthRate)~arrhenius_tmp,data=model1)
-summary(m1)
-model2<-bacteria_d%>%filter(TempPref=="Thermophile")
-m2<-lm(log10(GrowthRate)~arrhenius_tmp,data=model2)
-summary(m2)
-model1 <- model1 %>% mutate(temp_adjusted_maxgrowth_arrhenius = log10(GrowthRate) - (m1$coefficients['arrhenius_tmp']*arrhenius_tmp+m1$coefficients['(Intercept)'])) 
-
-#Use model to calculate residuals
-#measured growth rate minus estimated growth rate = residual
-b2<-ggplot(bacteria_d, aes(OptimumTemp,log(GrowthRate), fill=TempPref,color=TempPref))+
-  geom_point(shape=21,size=1,alpha=0.5)+
-  geom_smooth(method = "lm",se=F)+
-  theme_classic()
-T2<-a2+b2
-T2
-
-m3<-lm(log10(GrowthRate)~OptimumTemp,data=model1)
-summary(m3)
-m4<-lm(log10(GrowthRate)~OptimumTemp,data=model2)
-summary(m4)
-model1<- model1 %>% mutate(
-  temp_adjusted_maxgrowth =log10(GrowthRate) - (m3$coefficients['OptimumTemp']*OptimumTemp+m3$coefficients['(Intercept)']))
-write.table (model1, file ="C:/Users/FAN/Desktop/Data/AdjustedT(B).csv", sep =",")
 
